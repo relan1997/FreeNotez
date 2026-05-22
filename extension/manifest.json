@@ -4,6 +4,12 @@
   "version": "1.0.0",
   "description": "AI Meeting Notetaker — one-click recording for Google Meet",
   "permissions": ["activeTab"],
+  "web_accessible_resources": [
+    {
+      "resources": ["media/icon1.jpeg"],
+      "matches": ["https://meet.google.com/*"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["https://meet.google.com/*"],
