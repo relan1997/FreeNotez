@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "FreeNotez",
+  "version": "1.0.0",
+  "description": "AI Meeting Notetaker — one-click recording for Google Meet",
+  "permissions": ["activeTab"],
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ]
+}

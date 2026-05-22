@@ -1,0 +1,26 @@
+#freenotez-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 99999;
+  padding: 12px 20px;
+  background-color: #e53935;
+  color: #fff;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 24px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+#freenotez-btn:hover {
+  background-color: #c62828;
+  transform: scale(1.05);
+}
+
+#freenotez-btn:active {
+  transform: scale(0.97);
+}
