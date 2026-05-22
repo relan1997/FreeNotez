@@ -14,7 +14,11 @@
     btn.appendChild(img);
 
     btn.addEventListener("click", () => {
-      alert("FreeNotez button clicked! Recording will start here soon.");
+      fetch("http://localhost:8000/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meeting_url: window.location.href })
+      }).catch(() => {});
     });
 
     document.body.appendChild(btn);

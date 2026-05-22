@@ -26,3 +26,21 @@ Whenever you edit files in `extension/`:
 - **Button not showing up?** Make sure the URL starts with `https://meet.google.com/`. The content script only injects on Meet pages.
 - **Extension not listed?** Confirm you selected the `extension/` folder (the one containing `manifest.json`), not the parent `FreeNotez/` folder.
 - **Changes not reflecting?** You must reload the extension AND refresh the Meet tab after every code change.
+
+## Starting the local server
+
+1. Open a terminal and navigate to the server folder:
+   ```
+   cd server
+   ```
+2. Install dependencies (first time only):
+   ```
+   npm install
+   ```
+3. Start the server:
+   ```
+   npm start
+   ```
+4. You should see: `FreeNotez server running on http://localhost:8000`
+
+The server must be running before you click the FreeNotez button in a Meet call. When you click the button, you'll see `helloo` printed in this terminal.
