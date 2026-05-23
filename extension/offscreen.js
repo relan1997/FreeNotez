@@ -1,25 +1,32 @@
 // FreeNotez — offscreen recorder
 // Lives in a hidden document so MediaRecorder survives popup/icon UI churn.
-// Receives a tabCapture streamId from background.js, records A+V (+mic),
-// and uploads the resulting webm to the local server on stop.
+// Receives a tabCapture streamId from background.js, records A+V (+mic).
+//
+// On stop:
+//   - Video (A+V webm) → browser download, stays local, never hits the server.
+//   - Audio-only (opus webm) → POST to localhost:8000/upload, saved to disk there.
 
 const SERVER_UPLOAD_URL = "http://localhost:8000/upload";
 
-let mediaRecorder = null;
-let recordedChunks = [];
+// Two separate recorders — one for video, one for audio.
+let videoRecorder = null;
+let audioRecorder = null;
+let videoChunks = [];
+let audioChunks = [];
+
 let tabStream = null;
 let micStream = null;
 let audioContext = null;
-let mixedStream = null;
 let activeTabId = null;
 
 async function startRecording(streamId, tabId) {
-  if (mediaRecorder) {
+  if (videoRecorder || audioRecorder) {
     console.warn("[offscreen] already recording");
     return;
   }
   activeTabId = tabId;
-  recordedChunks = [];
+  videoChunks = [];
+  audioChunks = [];
 
   try {
     // 1. Capture the tab's audio + video using the streamId from background.
@@ -79,39 +86,62 @@ async function startRecording(streamId, tabId) {
       micSource.connect(destination);
     }
 
-    // 4. Build the final stream: video from tab + mixed audio.
-    const videoTrack = tabStream.getVideoTracks()[0];
     const mixedAudioTrack = destination.stream.getAudioTracks()[0];
-    mixedStream = new MediaStream([videoTrack, mixedAudioTrack]);
+    const videoTrack = tabStream.getVideoTracks()[0];
 
-    // 5. MediaRecorder. Prefer vp9; fall back to vp8.
-    const mimeCandidates = [
+    // 4a. VIDEO recorder — tab video + mixed audio, saved locally via download.
+    //     Never sent to the server.
+    const videoMimeCandidates = [
       "video/webm;codecs=vp9,opus",
       "video/webm;codecs=vp8,opus",
       "video/webm"
     ];
-    const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
+    const videoMime = videoMimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
+    const videoStream = new MediaStream([videoTrack, mixedAudioTrack]);
 
-    mediaRecorder = new MediaRecorder(mixedStream, {
-      mimeType,
+    videoRecorder = new MediaRecorder(videoStream, {
+      mimeType: videoMime,
       videoBitsPerSecond: 1_500_000,
       audioBitsPerSecond: 96_000
     });
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data && event.data.size > 0) {
-        recordedChunks.push(event.data);
-      }
+    videoRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) videoChunks.push(e.data);
     };
-
-    mediaRecorder.onstop = handleStop;
-    mediaRecorder.onerror = (err) => {
-      console.error("[offscreen] MediaRecorder error:", err);
+    videoRecorder.onerror = (err) => {
+      console.error("[offscreen] videoRecorder error:", err);
       sendBackgroundMessage({ type: "offscreen:error", error: String(err.error || err) });
     };
 
-    mediaRecorder.start(30_000); // 30s chunks
-    console.log("[offscreen] recording started:", mimeType);
+    // 4b. AUDIO recorder — mixed audio only, uploaded to the server.
+    const audioMime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : "audio/webm";
+    const audioOnlyStream = new MediaStream([mixedAudioTrack]);
+
+    audioRecorder = new MediaRecorder(audioOnlyStream, {
+      mimeType: audioMime,
+      audioBitsPerSecond: 96_000
+    });
+    audioRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) audioChunks.push(e.data);
+    };
+    audioRecorder.onerror = (err) => {
+      console.error("[offscreen] audioRecorder error:", err);
+    };
+
+    // 5. Start both. Use a Promise to wait for both onstop events before
+    //    finalizing, since .stop() is async and fires onstop when fully flushed.
+    const videoStopped = new Promise((res) => (videoRecorder.onstop = res));
+    const audioStopped = new Promise((res) => (audioRecorder.onstop = res));
+
+    videoRecorder.start(30_000);
+    audioRecorder.start(30_000);
+
+    // Stash the stop-promises so handleStop can await them.
+    videoRecorder._stopped = videoStopped;
+    audioRecorder._stopped = audioStopped;
+
+    console.log("[offscreen] recording started — video:", videoMime, "| audio:", audioMime);
   } catch (err) {
     console.error("[offscreen] startRecording failed:", err);
     cleanupTracks();
@@ -120,34 +150,47 @@ async function startRecording(streamId, tabId) {
 }
 
 function stopRecording() {
-  if (!mediaRecorder) {
+  if (!videoRecorder && !audioRecorder) {
     console.warn("[offscreen] stopRecording called but no recorder");
     sendBackgroundMessage({ type: "offscreen:finished", ok: false, error: "not-recording" });
     return;
   }
-  if (mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop(); // triggers onstop -> handleStop
-  } else {
-    handleStop();
-  }
+  // Stop both recorders. Each fires its onstop Promise (stored in _stopped).
+  // handleStop awaits both before finalizing.
+  if (videoRecorder && videoRecorder.state !== "inactive") videoRecorder.stop();
+  if (audioRecorder && audioRecorder.state !== "inactive") audioRecorder.stop();
+  handleStop();
 }
 
 async function handleStop() {
   try {
-    const mimeType = mediaRecorder?.mimeType || "video/webm";
-    const blob = new Blob(recordedChunks, { type: mimeType });
-    console.log(`[offscreen] recording stopped, blob size: ${blob.size} bytes`);
+    // Wait for both recorders to fully flush their last chunk.
+    await Promise.all([
+      videoRecorder?._stopped,
+      audioRecorder?._stopped
+    ]);
+
+    const videoMime = videoRecorder?.mimeType || "video/webm";
+    const audioMime = audioRecorder?.mimeType || "audio/webm";
+
+    const videoBlob = new Blob(videoChunks, { type: videoMime });
+    const audioBlob = new Blob(audioChunks, { type: audioMime });
+
+    console.log(`[offscreen] video blob: ${videoBlob.size} bytes | audio blob: ${audioBlob.size} bytes`);
 
     cleanupTracks();
 
-    // Upload to local server.
+    // --- VIDEO: download locally, never sent to server ---
+    triggerLocalDownload(videoBlob, `freenotez-video-${Date.now()}.webm`);
+
+    // --- AUDIO: upload to local server ---
     const meta = {
       tab_id: activeTabId,
-      mime: mimeType,
+      mime: audioMime,
       ended_at: Date.now()
     };
     const fd = new FormData();
-    fd.append("media", blob, `recording-${Date.now()}.webm`);
+    fd.append("media", audioBlob, `recording-audio-${Date.now()}.webm`);
     fd.append("meta", JSON.stringify(meta));
 
     let ok = false;
@@ -158,9 +201,9 @@ async function handleStop() {
       if (!ok) error = `Upload HTTP ${res.status}`;
     } catch (uploadErr) {
       error = String(uploadErr.message || uploadErr);
-      console.error("[offscreen] upload failed:", uploadErr);
-      // Fallback: trigger a download so the recording isn't lost.
-      triggerLocalDownload(blob);
+      console.error("[offscreen] audio upload failed:", uploadErr);
+      // Fallback: download the audio locally too so it isn't lost.
+      triggerLocalDownload(audioBlob, `freenotez-audio-${Date.now()}.webm`);
     }
 
     sendBackgroundMessage({ type: "offscreen:finished", ok, error });
@@ -168,28 +211,28 @@ async function handleStop() {
     console.error("[offscreen] handleStop failed:", err);
     sendBackgroundMessage({ type: "offscreen:finished", ok: false, error: String(err.message || err) });
   } finally {
-    mediaRecorder = null;
-    recordedChunks = [];
+    videoRecorder = null;
+    audioRecorder = null;
+    videoChunks = [];
+    audioChunks = [];
   }
 }
 
 function cleanupTracks() {
   try { tabStream?.getTracks().forEach((t) => t.stop()); } catch {}
   try { micStream?.getTracks().forEach((t) => t.stop()); } catch {}
-  try { mixedStream?.getTracks().forEach((t) => t.stop()); } catch {}
   try { audioContext?.close(); } catch {}
   tabStream = null;
   micStream = null;
-  mixedStream = null;
   audioContext = null;
 }
 
-function triggerLocalDownload(blob) {
+function triggerLocalDownload(blob, filename) {
   try {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `freenotez-${Date.now()}.webm`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
