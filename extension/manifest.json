@@ -23,7 +23,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["media/icon1.jpeg"],
+      "resources": ["media/icon1.jpeg", "permission.html", "permission.js"],
       "matches": ["https://meet.google.com/*"]
     }
   ],

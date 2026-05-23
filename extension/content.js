@@ -140,6 +140,8 @@
     } else if (msg.type === "recording-finished") {
       setIdle();
       flashHint(msg.ok ? "Recording uploaded." : `Upload failed: ${msg.error || "unknown"}`);
+    } else if (msg.type === "recording-warning") {
+      flashHint(msg.error || "Recording warning");
     } else if (msg.type === "recording-error") {
       setIdle();
       flashHint(msg.error || "Recording error");

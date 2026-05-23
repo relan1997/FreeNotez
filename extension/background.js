@@ -218,7 +218,18 @@ async function stopRecording() {
 // Refresh the state cache when the worker spins up. Without these, the first
 // event after a worker death would see a stale "active: true" state.
 chrome.runtime.onStartup.addListener(loadState);
-chrome.runtime.onInstalled.addListener(loadState);
+chrome.runtime.onInstalled.addListener(async (details) => {
+  await loadState();
+  // First install: open the visible mic-permission page once. Offscreen docs
+  // can't show permission prompts, so we have to grant from a real tab.
+  if (details.reason === "install") {
+    try {
+      await chrome.tabs.create({ url: chrome.runtime.getURL("permission.html") });
+    } catch (err) {
+      console.warn("[FreeNotez] could not open permission page:", err);
+    }
+  }
+});
 
 // Toolbar icon click. This is the start (or toggle-off) entry point because
 // it carries extension user activation, which tabCapture demands.
@@ -271,6 +282,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         error: "Click the FreeNotez toolbar icon to start recording."
       });
       sendResponse({ ok: false, reason: "needs-toolbar-click" });
+      return;
+    }
+
+    if (msg.type === "offscreen:mic-denied") {
+      // Recording is still going (with tab audio only), but the user's voice
+      // is missing. Tell the floating button + auto-open the permission page
+      // so the user can fix this for next time.
+      console.warn("[FreeNotez] mic denied:", msg.error);
+      notifyContent(recordingState.tabId, {
+        type: "recording-warning",
+        error: "Mic permission missing — your voice won't be in this recording. Opening permission page."
+      });
+      try {
+        await chrome.tabs.create({ url: chrome.runtime.getURL("permission.html") });
+      } catch {}
       return;
     }
 

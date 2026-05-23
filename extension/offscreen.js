@@ -41,14 +41,24 @@ async function startRecording(streamId, tabId) {
       }
     });
 
-    // 2. Capture the user's mic separately (best-effort).
+    // 2. Capture the user's mic separately. This is critical — without the
+    //    mic, the recording only contains everyone else's voices, not yours.
+    //    Note: offscreen documents cannot show permission prompts. The
+    //    extension must already have mic permission via the visible
+    //    permission.html page (opened on install). If permission was never
+    //    granted, getUserMedia rejects with NotAllowedError immediately.
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
         video: false
       });
     } catch (micErr) {
-      console.warn("[offscreen] mic unavailable, recording tab audio only:", micErr);
+      console.error("[offscreen] mic capture failed:", micErr);
+      // Make this loud — caller will see a toast and know to grant permission.
+      sendBackgroundMessage({
+        type: "offscreen:mic-denied",
+        error: String(micErr.name || micErr.message || micErr)
+      });
       micStream = null;
     }
 

@@ -212,3 +212,26 @@ For when re-reading the file:
 - **Streaming upload mid-recording** — instead of one big POST at the end, chunk the upload as recording progresses. Reduces memory pressure and recovers gracefully if the browser crashes.
 - **Hotkey via `chrome.commands`** — would let the user start/stop without reaching for the toolbar icon. Same activation rules apply, so it should work.
 - **Per-meeting state keyed by Meet URL** — right now state is global. If a user opens two Meet tabs, the floating buttons need to know which one is recording.
+
+
+---
+
+## 11. Offscreen documents cannot prompt for permissions
+
+When the recorder didn't capture the user's voice, the symptom was: tab audio was fine, but the mic side of the mix was empty. The cause: `getUserMedia({ audio: true })` inside `offscreen.js` was rejecting with `NotAllowedError`, and the original code swallowed it with a `try/catch`.
+
+The deeper reason: **offscreen documents are hidden, and Chrome will not pop a permission dialog from a hidden context.** If the user has never granted mic permission to the extension origin via a visible UI, every `getUserMedia` call from the offscreen doc fails immediately.
+
+### Fix shape
+
+1. Ship a **visible** permission page (`permission.html` + `permission.js`) that calls `getUserMedia({ audio: true })`, immediately stops the tracks, and shows status. Permission is granted to the extension origin and is then shared with the offscreen document.
+2. Open this page automatically on `chrome.runtime.onInstalled` with `reason === "install"`.
+3. Stop swallowing the mic error in `offscreen.js`. Send `offscreen:mic-denied` back to the service worker so the floating button can surface it as a toast and the permission page can be re-opened.
+4. List `permission.html` and `permission.js` in `web_accessible_resources` so they're loadable by URL (`chrome-extension://<id>/permission.html`) for re-grant flows.
+
+### Things this also clarifies
+
+- **`chrome.tabCapture` for tab audio doesn't need mic permission.** It's a separate path. That's why tab audio worked without any prompt while mic kept failing silently.
+- **`navigator.permissions.query({ name: "microphone" })`** is a useful pre-check on the permission page to detect "already granted" and skip the prompt.
+- **The grant only happens once per extension install.** Reloading the extension keeps the permission. Uninstalling and reinstalling resets it.
+- **Don't try to silently fall back to "tab audio only".** Make the missing-mic case loud — otherwise users get half-recordings and never realize why.

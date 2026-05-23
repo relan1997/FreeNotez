@@ -69,6 +69,15 @@ The server must be running before you click the FreeNotez button in a Meet call.
    - Click the puzzle-piece (Extensions) icon next to the address bar.
    - Find FreeNotez and click the pin icon. The FreeNotez icon now stays in the toolbar.
 
+3. **Grant microphone access (one-time, required for your voice in the recording).**
+   - On first install, a tab titled "FreeNotez — Microphone Permission" opens automatically. Click **Grant microphone access** and choose **Allow** in the browser prompt. Close the tab once you see "Granted".
+   - If you missed it, open the page manually:
+     1. Go to `chrome://extensions` (or `brave://extensions`).
+     2. Find FreeNotez, click **Details**, then "Extension options" or copy the extension ID.
+     3. Visit `chrome-extension://<extension-id>/permission.html` directly.
+   - You can also open `chrome://settings/content/microphone` and explicitly allow the FreeNotez extension origin.
+   - **Why this is needed:** Chrome's MV3 offscreen documents are hidden, so they can't display a permission prompt. The visible permission page handles the one-time grant, after which the offscreen recorder inherits the access. Without this, the recording will contain everyone else's voices but not yours.
+
 ### Recording flow
 
 1. Join your Google Meet call as you normally would.
@@ -108,7 +117,7 @@ open ~/FreeNotez/recordings
 - **Recording stops immediately or never starts.** Open `chrome://extensions`, find FreeNotez, click "service worker" / "Inspect views" to see background console logs. Common causes:
   - `tabCapture` permission missing — reload the extension after the manifest update.
   - User gesture expired — happens if you Alt-Tab between the click and the capture. Click the icon while the Meet tab is focused.
-- **No audio in the recording.** The mic permission was denied. Visit `chrome://settings/content/microphone`, allow it for the extension, reload the extension, and try again.
+- **Your voice is missing from the recording but other voices are fine.** Mic permission was never granted to the extension origin. The offscreen recorder cannot prompt for it because it's hidden. Open `chrome-extension://<extension-id>/permission.html` (the page that opened on first install) and grant access there, or visit `chrome://settings/content/microphone` and allow the FreeNotez extension. Then start a new recording.
 - **Meeting goes silent in your headphones the moment recording starts.** Should not happen with the current code (Web Audio re-routes tab audio back to speakers), but if it does, restart the recording — the offscreen `AudioContext` likely failed to initialize.
 - **Upload fails with "Upload HTTP …" toast.** The local server isn't running or crashed. Restart it with `npm start` in `server/`. The recording isn't lost — the offscreen recorder triggers a browser download as fallback.
 - **File is huge.** A 1-hour 720p recording is ~600MB–1GB. Reduce by setting a lower `videoBitsPerSecond` in `extension/offscreen.js`, or record audio-only by stripping the `video:` constraint from the `getUserMedia` call.
