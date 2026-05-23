@@ -3,8 +3,24 @@
   "name": "FreeNotez",
   "version": "1.0.0",
   "description": "AI Meeting Notetaker — one-click recording for Google Meet",
-  "permissions": ["activeTab"],
+  "permissions": ["activeTab", "tabCapture", "offscreen", "storage", "scripting"],
   "host_permissions": ["http://localhost:8000/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": {
+      "16": "media/icon1.jpeg",
+      "48": "media/icon1.jpeg",
+      "128": "media/icon1.jpeg"
+    },
+    "default_title": "FreeNotez — click to start/stop recording"
+  },
+  "icons": {
+    "16": "media/icon1.jpeg",
+    "48": "media/icon1.jpeg",
+    "128": "media/icon1.jpeg"
+  },
   "web_accessible_resources": [
     {
       "resources": ["media/icon1.jpeg"],

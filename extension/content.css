@@ -2,30 +2,94 @@
   position: fixed;
   top: 24px;
   right: 24px;
-  z-index: 99999;
-  width: 56px;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   height: 56px;
-  padding: 0;
+  min-width: 56px;
+  padding: 0 14px 0 0;
   border: none;
-  border-radius: 50%;
+  border-radius: 28px;
+  background: rgba(32, 33, 36, 0.92);
+  color: #fff;
+  font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   cursor: pointer;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  transition: transform 0.1s ease, box-shadow 0.2s ease;
-}
-
-#freenotez-btn img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  transition: transform 0.1s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 #freenotez-btn:hover {
-  transform: scale(1.08);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transform: scale(1.04);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
 #freenotez-btn:active {
-  transform: scale(0.95);
+  transform: scale(0.96);
+}
+
+#freenotez-btn-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  flex-shrink: 0;
+}
+
+#freenotez-btn-label {
+  display: none;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+  padding-right: 4px;
+}
+
+#freenotez-btn.freenotez-recording {
+  background: #d93025;
+  padding-right: 16px;
+}
+
+#freenotez-btn.freenotez-recording #freenotez-btn-label {
+  display: inline-block;
+}
+
+#freenotez-btn.freenotez-recording::before {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 10px;
+  margin-left: 12px;
+  border-radius: 50%;
+  background: #fff;
+  animation: freenotez-pulse 1.2s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+@keyframes freenotez-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
+#freenotez-hint {
+  position: fixed;
+  top: 88px;
+  right: 24px;
+  z-index: 2147483647;
+  max-width: 320px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(32, 33, 36, 0.95);
+  color: #fff;
+  font: 500 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#freenotez-hint.freenotez-hint-visible {
+  opacity: 1;
+  transform: translateY(0);
 }

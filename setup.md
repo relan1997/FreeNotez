@@ -44,3 +44,78 @@ Whenever you edit files in `extension/`:
 4. You should see: `FreeNotez server running on http://localhost:8000`
 
 The server must be running before you click the FreeNotez button in a Meet call. When you click the button, you'll see `helloo` printed in this terminal.
+
+
+---
+
+## Recording a Google Meet (audio + video)
+
+### One-time prep
+
+1. **Start the local server** (it receives the recording when you stop):
+   ```
+   cd server
+   npm install      # first time only
+   npm start
+   ```
+   You should see:
+   ```
+   FreeNotez server running on http://localhost:8000
+   Recordings → /Users/<you>/FreeNotez/recordings
+   ```
+   Leave this terminal open.
+
+2. **Pin the FreeNotez icon to the toolbar** so you can find it during a meeting:
+   - Click the puzzle-piece (Extensions) icon next to the address bar.
+   - Find FreeNotez and click the pin icon. The FreeNotez icon now stays in the toolbar.
+
+### Recording flow
+
+1. Join your Google Meet call as you normally would.
+2. Once the meeting page loads, you'll see a small **floating FreeNotez button** at the top-right of the Meet page. Don't click it yet to start — clicking the floating button when idle only shows a hint, because tab capture must be initiated from the extension itself (this is a Chrome restriction).
+3. **Click the FreeNotez icon in the Chrome/Brave toolbar.** This is the only way to start. The first time, the browser may prompt for microphone permission — allow it (the mic is mixed into the recording so your voice is captured too; tab audio alone wouldn't include you).
+4. The floating button on the Meet page turns red and shows an elapsed timer (e.g. `02:14`). A pulsing dot indicates recording is live.
+5. Continue your meeting normally. The recording captures:
+   - Meet tab audio (everyone else's voices)
+   - Your microphone (your voice)
+   - The Meet tab's video (the gallery / shared screen / whoever is pinned)
+
+### Stopping the recording
+
+You can stop in any of these ways — they all do the same thing:
+
+- Click the **red floating button** on the Meet page (easiest).
+- Click the **FreeNotez toolbar icon** again (it toggles).
+- **Close the Meet tab** — the extension detects the tab closing and finalizes the recording gracefully.
+
+After stopping, the floating button shows `Stopping & uploading…` then `Recording uploaded.` once the server confirms.
+
+### Where the recording goes
+
+- File: `~/FreeNotez/recordings/<timestamp>.webm`
+- Format: WebM container, VP9 video + Opus audio (falls back to VP8 if VP9 isn't supported)
+- Plays in: Chrome, Brave, Firefox, VLC. QuickTime needs the VLC plugin or a webm-to-mp4 conversion.
+
+To open the latest recording quickly:
+```
+open ~/FreeNotez/recordings
+```
+
+### Troubleshooting recording
+
+- **Floating button shows but icon click does nothing.** Make sure the active tab is the Meet tab when you click the toolbar icon. Tab capture is bound to the active tab.
+- **"Click the FreeNotez toolbar icon to start recording" toast keeps appearing.** You're clicking the floating button while idle — that won't start recording. Use the toolbar icon for the first click.
+- **Recording stops immediately or never starts.** Open `chrome://extensions`, find FreeNotez, click "service worker" / "Inspect views" to see background console logs. Common causes:
+  - `tabCapture` permission missing — reload the extension after the manifest update.
+  - User gesture expired — happens if you Alt-Tab between the click and the capture. Click the icon while the Meet tab is focused.
+- **No audio in the recording.** The mic permission was denied. Visit `chrome://settings/content/microphone`, allow it for the extension, reload the extension, and try again.
+- **Meeting goes silent in your headphones the moment recording starts.** Should not happen with the current code (Web Audio re-routes tab audio back to speakers), but if it does, restart the recording — the offscreen `AudioContext` likely failed to initialize.
+- **Upload fails with "Upload HTTP …" toast.** The local server isn't running or crashed. Restart it with `npm start` in `server/`. The recording isn't lost — the offscreen recorder triggers a browser download as fallback.
+- **File is huge.** A 1-hour 720p recording is ~600MB–1GB. Reduce by setting a lower `videoBitsPerSecond` in `extension/offscreen.js`, or record audio-only by stripping the `video:` constraint from the `getUserMedia` call.
+
+### Hard limits to know
+
+- The Meet tab must stay open throughout the recording. Closing it stops the recording (gracefully — what was captured so far is uploaded).
+- One recording at a time per browser. Tab capture is single-tab-scoped.
+- The Mac must stay awake. If the system sleeps, recording pauses and may end up with gaps.
+- Recordings keep growing on disk forever. Clean up `~/FreeNotez/recordings/` periodically — there's no auto-prune yet.
